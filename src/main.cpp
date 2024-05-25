@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
 		("play-pause,t", "Toggle between play and pause.")
 		("stop", "Stop playback.")
 		("seek,s", po::value<int64_t>()->value_name("int"), "Seek forward or backward by the specified number of microseconds.")
-		("set-position,P", po::value<int64_t>()->value_name("int"), "Set playback position to the specified microsecond.")
+		("set-position,S", po::value<int64_t>()->value_name("int"), "Set playback position to the specified microsecond.")
 		("open-uri,u", po::value<std::string>()->value_name("str"), "Open and play the media from the specified URI.")
 		("set-volume,v", po::value<double>()->value_name("double"), "Set the playback volume (range: 0.0 to 1.0).")
 		("increment-volume,i", po::value<double>()->value_name("double"), "Increment the playback volume by the specified amount.")

@@ -52,7 +52,7 @@ mprisctl [options]
 - `-t, --play-pause`: Toggle between play and pause.
 - `--stop`: Stop playback.
 - `-s, --seek <int>`: Seek forward or backward by the specified number of microseconds.
-- `-P, --set-position <int>`: Set playback position to the specified microsecond.
+- `-S, --set-position <int>`: Set playback position to the specified microsecond.
 - `-u, --open-uri <str>`: Open and play the media from the specified URI.
 
 ### Volume Control
