@@ -1,6 +1,6 @@
 # Maintainer: Ahmed AbouEleyoun <amedoeyes@gmail.com>
 pkgname="mprisctl"
-pkgver="0.1.1"
+pkgver="0.1.2"
 pkgrel=1
 pkgdesc="Command-line utility that allows you to control MPRIS-compatible media players"
 url="https://github.com/amedoeyes/mprisctl"

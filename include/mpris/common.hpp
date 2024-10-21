@@ -3,6 +3,7 @@
 
 #include <dbus/dbus.h>
 
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -167,14 +168,7 @@ inline void extract_metadata(DBusMessageIter& iter, Metadata& metadata) {
 }
 
 template <typename T>
-void print_field(const T value) {
-	if (!value) return;
-	std::cout << value << '\n';
-}
-
-template <>
-inline void print_field(const std::string value) {
-	if (value.empty()) return;
+inline void print_field(const T value) {
 	std::cout << value << '\n';
 }
 
@@ -187,14 +181,7 @@ void print_field(const std::vector<T> value) {
 }
 
 template <typename T>
-void print_field(const std::string_view field, const T value) {
-	if (!value) return;
-	std::cout << field << ": " << value << '\n';
-}
-
-template <>
-inline void print_field(const std::string_view field, const std::string value) {
-	if (value.empty()) return;
+inline void print_field(const std::string_view field, const T value) {
 	std::cout << field << ": " << value << '\n';
 }
 
@@ -202,10 +189,11 @@ template <typename T>
 void print_field(const std::string_view field, const std::vector<T> value) {
 	if (value.empty()) return;
 	std::cout << field << ":";
-	if (value.size() > 1) std::cout << '\n';
-	for (auto& item : value) {
-		std::cout << " " << item << '\n';
+	for (size_t i = 0; i < value.size(); i++) {
+		std::cout << " " << value[i];
+		if (i + 1 < value.size()) std::cout << ',';
 	}
+	std::cout << '\n';
 }
 
 inline void print_metadata(

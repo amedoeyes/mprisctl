@@ -1,6 +1,6 @@
 ---@diagnostic disable: undefined-global, undefined-field
 
-local VERSION = "0.1.1"
+local VERSION = "0.1.2"
 
 set_project("mprisctl")
 set_version(VERSION)
