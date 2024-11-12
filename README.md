@@ -17,11 +17,11 @@ Build dependencies:
 - Boost
 - D-Bus
 
-To build the project, you need to have Meson and Ninja installed. Then, run the following commands:
+To build the project, you need to have [xmake](https://github.com/xmake-io/xmake) installed. Then, run the following commands:
 
 ```bash
-meson setup build --buildtype=release
-ninja -C build
+xmake f -m release
+xmake
 ```
 
 ## Usage
