@@ -88,15 +88,22 @@ inline void extract(DBusMessageIter& iter, std::string& value) {
 	value = str;
 }
 
-template <>
+template<>
 inline void extract(DBusMessageIter& iter, std::vector<std::string>& value) {
-	DBusMessageIter array_iter;
-	dbus_message_iter_recurse(&iter, &array_iter);
-	while (dbus_message_iter_get_arg_type(&array_iter) != DBUS_TYPE_INVALID) {
-		char* str;
-		dbus_message_iter_get_basic(&array_iter, &str);
-		value.push_back(str);
-		dbus_message_iter_next(&array_iter);
+	int type = dbus_message_iter_get_arg_type(&iter);
+	if (type == DBUS_TYPE_STRING) {
+		const char* str = nullptr;
+		dbus_message_iter_get_basic(&iter, &str);
+		value.emplace_back(str ? str : "");
+	} else if (type == DBUS_TYPE_ARRAY) {
+		DBusMessageIter array_iter;
+		dbus_message_iter_recurse(&iter, &array_iter);
+		while (dbus_message_iter_get_arg_type(&array_iter) != DBUS_TYPE_INVALID) {
+			const char* str = nullptr;
+			dbus_message_iter_get_basic(&array_iter, &str);
+			value.emplace_back(str ? str : "");
+			dbus_message_iter_next(&array_iter);
+		}
 	}
 }
 
