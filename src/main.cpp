@@ -1,163 +1,506 @@
-#include <boost/program_options.hpp>
-#include <boost/program_options/parsers.hpp>
-#include <fstream>
-#include <iostream>
-
 #include "mpris/common.hpp"
 #include "mpris/mpris.hpp"
 
-namespace po = boost::program_options;
+#include <cassert>
 
-constexpr const char *tmp_file = "/tmp/mprisctl_current_player";
+import std;
 
-static void save_current_player(std::string player) {
-	std::ofstream file(tmp_file);
-	file << player;
-	file.close();
-}
+static constexpr auto tmp_file = "/tmp/mprisctl_current_player";
 
-static std::string load_current_player() {
-	std::string player;
-	std::ifstream file(tmp_file);
-	file >> player;
-	file.close();
-	return player;
-}
+using value_type = std::variant<std::monostate, std::int64_t, double, std::string>;
 
-int main(int argc, char *argv[]) {
-	po::options_description desc("mprisctl options");
-	desc.add_options()
-		("next-player,N", "Switch to the next available MPRIS player.")
-		("previous-player,P", "Switch to the previous available MPRIS player.")
-		("set-player", po::value<std::string>()->value_name("str"), "Specify the player to control by name.")
-		("raise,r", "Bring the specified player to the foreground.")
-		("quit,q", "Quit the specified player.")
-		("display-mpris-properties", po::value<std::string>()->implicit_value("")->value_name("str"), "Display MPRIS properties of the current player. Optionally, specify a field to display only that particular property's value.")
+enum class option_category : std::uint64_t { general, player, tracklist, misc, size };
 
-		("next,n", "Skip to the next track.")
-		("previous,p", "Skip to the previous track.")
-		("pause", "Pause playback.")
-		("play", "Start playback.")
-		("play-pause,t", "Toggle between play and pause.")
-		("stop", "Stop playback.")
-		("seek,s", po::value<int64_t>()->value_name("int"), "Seek forward or backward by the specified number of microseconds.")
-		("set-position,S", po::value<int64_t>()->value_name("int"), "Set playback position to the specified microsecond.")
-		("open-uri,u", po::value<std::string>()->value_name("str"), "Open and play the media from the specified URI.")
-		("set-volume,v", po::value<double>()->value_name("double"), "Set the playback volume (range: 0.0 to 1.0).")
-		("increment-volume,i", po::value<double>()->value_name("double"), "Increment the playback volume by the specified amount.")
-		("decrement-volume,d", po::value<double>()->value_name("double"), "Decrement the playback volume by the specified amount.")
-		("display-metadata", po::value<std::string>()->implicit_value("")->value_name("str"),"Display metadata for the current track. Optionally, specify a field to display only that particular property's value.")
-		("display-player-properties", po::value<std::string>()->implicit_value("")->value_name("str"), "Display properties of the current player. Optionally, specify a field to display only that particular property's value.")
+template<typename T>
+struct option_value {
+	std::string name;
+	bool optional = false;
+};
 
-		("add-track", po::value<std::string>()->value_name("str"), "Add a track to the track list by URI.")
-		("add-track-current" ,"Mark the added track as the current track")
-		("add-track-after", po::value<std::string>()->value_name("str"), "Add the track after the specified track id.")
-		("remove-track", po::value<std::string>()->value_name("str"), "Remove a track from the track list by track id.")
-		("go-to-track", po::value<std::string>()->value_name("str"), "Jump to the specified track in the track list by track id.")
-		("display-track-list-properties", po::value<std::string>()->implicit_value(""), "Display track list properties of the current player. Optionally, specify a field to display only that particular property's value.")
+struct option {
+	std::pair<std::string, std::string> flags;
+	std::string description;
+	option_category category;
+	std::optional<std::variant<option_value<std::int64_t>, option_value<double>, option_value<std::string>>>
+		value = std::nullopt;
+};
 
-		("version", "Display version information.")
-		("help,h", "Display this help message.");
+static const auto options = std::array<std::pair<std::string, option>, 27>{{
+	{
+		"next_player",
+		{
+			{"-N", "--next-player"},
+			"Switch to next player.",
+			option_category::general,
+		},
+	},
+	{
+		"previous_player",
+		{
+			{"-P", "--previous-player"},
+			"Switch to previous player.",
+			option_category::general,
+		},
+	},
+	{
+		"set_player",
+		{
+			{"", "--set-player"},
+			"Set player to control.",
+			option_category::general,
+			option_value<std::string>{.name = "Name"},
+		},
+	},
+	{
+		"raise",
+		{
+			{"-r", "--raise"},
+			"Raise current player.",
+			option_category::general,
+		},
+	},
+	{
+		"quit",
+		{
+			{"-q", "--quit"},
+			"Quit current player.",
+			option_category::general,
+		},
+	},
+	{
+		"properties",
+		{
+			{"", "--properties"},
+			"Display MPRIS properties.",
+			option_category::general,
+			option_value<std::string>{.name = "Field", .optional = true},
+		},
+	},
 
-	if (argc == 1) {
-		std::cout << desc << '\n';
-		return 0;
+	{
+		"next",
+		{
+			{"-n", "--next"},
+			"Skip to next track.",
+			option_category::player,
+		},
+	},
+	{
+		"previous",
+		{
+			{"-p", "--previous"},
+			"Skip to previous track.",
+			option_category::player,
+		},
+	},
+	{
+		"pause",
+		{
+			{"", "--pause"},
+			"Pause playback.",
+			option_category::player,
+		},
+	},
+	{
+		"play",
+		{
+			{"", "--play"},
+			"Start playback.",
+			option_category::player,
+		},
+	},
+	{
+		"play_pause",
+		{
+			{"-t", "--play-pause"},
+			"Toggle between play and pause.",
+			option_category::player,
+		},
+	},
+	{
+		"stop",
+		{
+			{"", "--stop"},
+			"Stop playback.",
+			option_category::player,
+		},
+	},
+	{
+		"seek",
+		{
+			{"-s", "--seek"},
+			"Seek forward or backward by microseconds.",
+			option_category::player,
+			option_value<std::int64_t>{.name = "Microseconds"},
+		},
+	},
+	{
+		"set_position",
+		{
+			{"-S", "--set-position"},
+			"Set playback position.",
+			option_category::player,
+			option_value<std::int64_t>{.name = "Microseconds"},
+		},
+	},
+	{
+		"open",
+		{
+			{"-o", "--open"},
+			"Open and play media.",
+			option_category::player,
+			option_value<std::string>{.name = "URI"},
+		},
+	},
+	{
+		"set_volume",
+		{
+			{"-v", "--set-volume"},
+			"Set playback volume.",
+			option_category::player,
+			option_value<double>{.name = "Volume"},
+		},
+	},
+	{
+		"increment_volume",
+		{
+			{"-i", "--increment-volume"},
+			"Increment playback volume.",
+			option_category::player,
+			option_value<double>{.name = "Volume"},
+		},
+	},
+	{
+		"decrement_volume",
+		{
+			{"-d", "--decrement-volume"},
+			"Decrement playback volume.",
+			option_category::player,
+			option_value<double>{.name = "volume"},
+		},
+	},
+	{
+		"metadata",
+		{
+			{"", "--metadata"},
+			"Display metadata of current track.",
+			option_category::player,
+			option_value<std::string>{.name = "Field", .optional = true},
+		},
+	},
+	{
+		"player_properties",
+		{
+			{"", "--player-properties"},
+			"Display properties of current player.",
+			option_category::player,
+			option_value<std::string>{.name = "Field", .optional = true},
+		},
+	},
+
+	{
+		"add_track",
+		{
+			{"", "--add-track"},
+			"Add track to tracklist.",
+			option_category::tracklist,
+			option_value<std::string>{.name = "URI"},
+		},
+	},
+	{
+		"add_track_after",
+		{
+			{"", "--add-track-after"},
+			"Add track after the specified track.",
+			option_category::tracklist,
+			option_value<std::string>{.name = "ID"},
+		},
+	},
+	{
+		"remove_track",
+		{
+			{"", "--remove-track"},
+			"Remove track from tracklist.",
+			option_category::tracklist,
+			option_value<std::string>{.name = "ID"},
+		},
+	},
+	{
+		"go_to_track",
+		{
+			{"", "--go-to-track"},
+			"Go to track in tracklist.",
+			option_category::tracklist,
+			option_value<std::string>{.name = "ID"},
+		},
+	},
+	{
+		"tracklist_properties",
+		{
+			{"", "--tracklist-properties"},
+			"Display tracklist properties of current player.",
+			option_category::tracklist,
+			option_value<std::string>{.name = "Field", .optional = true},
+		},
+	},
+
+	{
+		"version",
+		{
+			{"", "--version"},
+			"Display version information.",
+			option_category::misc,
+		},
+	},
+	{
+		"help",
+		{
+			{"-h", "--help"},
+			"Display this help message.",
+			option_category::misc,
+		},
+	},
+}};
+
+template<class... Ts>
+struct overloaded : Ts... {
+	using Ts::operator()...;
+};
+template<class... Ts>
+overloaded(Ts...) -> overloaded<Ts...>;
+
+auto parse_args(std::span<const std::string_view> args) {
+	auto result = std::unordered_map<std::string, value_type>{};
+
+	for (auto i = 0ul; i < args.size();) {
+		auto arg = args[i++];
+		auto assigned_value = std::string_view{};
+		if (std::ranges::contains(arg, '=')) {
+			auto parts = arg | std::views::split('=') | std::views::transform([](auto&& p) { return std::string_view(p); });
+			auto it = parts.begin();
+			arg = *it;
+			assigned_value = *(++it);
+		}
+
+		const auto it = std::ranges::find_if(options, [&](auto&& o) {
+			return o.second.flags.first == arg || o.second.flags.second == arg;
+		});
+		if (it == options.end()) throw std::runtime_error(std::format("'{}' is not a valid option", arg));
+		const auto& [option_name, option] = *it;
+
+		if (!option.value && !assigned_value.empty()) {
+			throw std::runtime_error(std::format("option '{}' does not expect a value", arg));
+		}
+
+		auto value = value_type{std::monostate{}};
+		if (option.value) {
+			auto value_str = std::string_view{};
+			if (!assigned_value.empty()) {
+				value_str = assigned_value;
+			} else if (i < args.size() && !args[i].starts_with("-")) {
+				value_str = args[i++];
+			} else if (!std::visit([](auto&& v) { return v.optional; }, *option.value)) {
+				throw std::runtime_error(std::format("option '{}' expects value '{}'",
+				                                     arg,
+				                                     std::visit([](auto&& v) { return v.name; }, *option.value)));
+			}
+			if (!value_str.empty()) {
+				value = std::visit(overloaded{
+														 [&](const option_value<std::int64_t>&) -> value_type {
+															 auto value = 0l;
+															 auto [_, ec] = std::from_chars(value_str.data(),
+					                                                    value_str.data() + value_str.size(),
+					                                                    value);
+															 if (ec != std::errc{}) {
+																 throw std::runtime_error(std::format("'{}' is not a valid value for {}",
+						                                                          value_str,
+						                                                          arg));
+															 }
+															 return value;
+														 },
+														 [&](const option_value<double>&) -> value_type {
+															 auto value = 0.0;
+															 try {
+																 value = std::stod(value_str.data());
+															 } catch (...) {
+																 throw std::runtime_error(std::format("'{}' is not a valid value for {}",
+						                                                          value_str,
+						                                                          arg));
+															 }
+															 // not supported by libc++ yet :/
+					                     // auto [_, ec] = std::from_chars(arg_val.data(), arg_val.data() + arg_val.size(),
+					                     // value); if (ec != std::errc{}) { 	throw std::runtime_error(std::format("'{}' is
+					                     // not a valid value for {}", arg_val, arg));
+					                     // }
+															 return value;
+														 },
+														 [&](const option_value<std::string>&) -> value_type { return std::string(value_str); },
+													 },
+				                   *option.value);
+			}
+		}
+
+		result.emplace(option_name, value);
 	}
 
+	return result;
+}
+
+auto display_help() -> void {
+	auto get_option_width = [&](const auto& o) {
+		auto width = 0;
+		const auto& flags = o.flags;
+		width += 2 + flags.second.size();
+		const auto& value = o.value;
+		if (value) {
+			width += std::visit([](auto&& v) { return v.name.size(); }, *value);
+			width += std::visit([](auto&& v) { return v.optional; }, *value) ? 2 : 0;
+		}
+		return width;
+	};
+
+	const auto max_len = std::ranges::max(options | std::views::values | std::views::transform(get_option_width));
+
+	auto categorized_options = std::array<std::vector<option>, std::to_underlying(option_category::size)>{};
+	for (const auto& o : options | std::views::values) {
+		categorized_options[std::to_underlying(o.category)].emplace_back(o);
+	}
+
+	static constexpr auto get_category_str = [](const auto& category) {
+		switch (category) {
+			using enum option_category;
+		case general: return "General";
+		case player: return "Player";
+		case tracklist: return "Tracklist";
+		case misc: return "Miscellaneous";
+		default: std::unreachable();
+		}
+	};
+
+	std::println("Usage:");
+	std::println("  mprisctl options");
+	std::println("");
+	for (const auto i : std::views::iota(0ul, categorized_options.size())) {
+		std::println("{} Options:", get_category_str(static_cast<option_category>(i)));
+		for (const auto& o : categorized_options[i]) {
+			const auto padding = max_len - get_option_width(o);
+			std::print("  ");
+			std::print("{:2}", o.flags.first);
+			if (o.flags.first.size() > 0) std::print(", ");
+			else std::print("  ");
+			std::print("{}", o.flags.second);
+			std::print(" ");
+			if (o.value) {
+				const auto name = std::visit([](auto&& v) { return v.name; }, *o.value);
+				const auto optional = std::visit([](auto&& v) { return v.optional; }, *o.value);
+				if (optional) std::print("[");
+				std::print("{}", name);
+				if (optional) std::print("]");
+			}
+			for (const auto _ : std::views::iota(0, padding)) std::print(" ");
+			std::print("  ");
+			std::print("{}", o.description);
+			std::println("");
+		}
+		std::println("");
+	}
+}
+
+auto main(int argc, char** argv) -> int {
 	try {
-		po::variables_map vm;
-		po::store(po::parse_command_line(argc, argv, desc), vm);
-		po::notify(vm);
+		const auto args = std::span(std::next(argv), argc - 1)  //
+		                | std::views::transform([](const auto& a) { return std::string_view(a); })  //
+		                | std::ranges::to<std::vector>();
 
-		if (vm.count("help")) {
-			std::cout << desc << '\n';
-			return 0;
-		}
-		if (vm.count("version")) {
-			std::cout << "mprisctl version " << VERSION << '\n';
-			return 0;
+		if (args.empty()) {
+			display_help();
+			std::quick_exit(0);
 		}
 
-		std::string current_player = load_current_player();
-		MPRIS mpris(current_player);
+		const auto parsed_args = parse_args(args);
 
-		if (vm.count("next-player")) mpris.next();
-		if (vm.count("previous-player")) mpris.previous();
-		if (vm.count("set-player"))
-			mpris.set_player(vm["set-player"].as<std::string>());
-		if (vm.count("raise")) mpris.raise();
-		if (vm.count("quit")) mpris.quit();
-		if (vm.count("display-mpris-properties"))
-			mpris.print_properties(
-				vm["display-mpris-properties"].as<std::string>()
-			);
+		static const auto handle_arg = [&](auto name, auto&&... funcs) {
+			if (parsed_args.contains(name)) {
+				std::visit(overloaded{funcs..., [](auto&&) { assert(false); }}, parsed_args.at(name));
+			}
+		};
 
-		Player *player = mpris.get_player();
+		handle_arg("help", [&](const std::monostate&) {
+			display_help();
+			std::quick_exit(0);
+		});
 
-		if (vm.count("next")) player->next();
-		if (vm.count("previous")) player->previous();
-		if (vm.count("pause")) player->pause();
-		if (vm.count("play")) player->play();
-		if (vm.count("play-pause")) player->play_pause();
-		if (vm.count("stop")) player->stop();
-		if (vm.count("seek")) player->seek(vm["seek"].as<int64_t>());
-		if (vm.count("set-position"))
-			player->set_position(vm["set-position"].as<int64_t>());
-		if (vm.count("open-uri"))
-			player->open_uri(vm["open-uri"].as<std::string>());
-		if (vm.count("set-volume"))
-			player->set_volume(vm["set-volume"].as<double>());
-		if (vm.count("increment-volume")) {
-			double current_volume = player->get_volume() * 100;
-			double new_volume = vm["increment-volume"].as<double>() * 100;
+		handle_arg("version", [&](const std::monostate&) {
+			std::println("mprisctl " VERSION);
+			std::quick_exit(0);
+		});
+
+		auto current_player = std::string{};
+		std::ifstream{tmp_file} >> current_player;
+		auto mpris = MPRIS{current_player};
+
+		handle_arg("next_player", [&](const std::monostate&) { mpris.next(); });
+		handle_arg("previous_player", [&](const std::monostate&) { mpris.previous(); });
+		handle_arg("set_player", [&](const std::string& s) { mpris.set_player(s); });
+		handle_arg("raise", [&](const std::monostate&) { mpris.raise(); });
+		handle_arg("quit", [&](const std::monostate&) { mpris.quit(); });
+		handle_arg(
+			"properties",
+			[&](const std::monostate&) { mpris.print_properties(); },
+			[&](const std::string& s) { mpris.print_properties(s); });
+
+		Player* player = mpris.get_player();
+
+		handle_arg("next", [&](const std::monostate&) { player->next(); });
+		handle_arg("previous", [&](const std::monostate&) { player->previous(); });
+		handle_arg("pause", [&](const std::monostate&) { player->pause(); });
+		handle_arg("play", [&](const std::monostate&) { player->play(); });
+		handle_arg("play_pause", [&](const std::monostate&) { player->play_pause(); });
+		handle_arg("stop", [&](const std::monostate&) { player->stop(); });
+		handle_arg("seek", [&](const std::int64_t& micro) { player->seek(micro); });
+		handle_arg("set_position", [&](const std::int64_t& micro) { player->set_position(micro); });
+		handle_arg("open", [&](const std::string& uri) { player->open_uri(uri); });
+		handle_arg("set_volume", [&](const double& volume) { player->set_volume(volume); });
+		handle_arg("increment_volume", [&](const double& volume) {
+			const auto current_volume = player->get_volume() * 100;
+			const auto new_volume = volume * 100;
 			player->set_volume((current_volume + new_volume) / 100);
-		}
-		if (vm.count("decrement-volume")) {
-			double current_volume = player->get_volume() * 100;
-			double new_volume = vm["decrement-volume"].as<double>() * 100;
+		});
+		handle_arg("decrement_volume", [&](const double& volume) {
+			const auto current_volume = player->get_volume() * 100;
+			const auto new_volume = volume * 100;
 			player->set_volume((current_volume - new_volume) / 100);
-		}
-		if (vm.count("display-metadata"))
-			print_metadata(
-				player->get_metadata(), vm["display-metadata"].as<std::string>()
-			);
-		if (vm.count("display-player-properties"))
-			player->print_properties(
-				vm["display-player-properties"].as<std::string>()
-			);
+		});
+		handle_arg(
+			"metadata",
+			[&](const std::monostate&) { print_metadata(player->get_metadata()); },
+			[&](const std::string& field) { print_metadata(player->get_metadata(), field); });
+		handle_arg(
+			"player_properties",
+			[&](const std::monostate&) { player->print_properties(""); },
+			[&](const std::string& field) { player->print_properties(field); });
 
-		TrackList *track_list = mpris.get_track_list();
+		TrackList* track_list = mpris.get_track_list();
 
 		if (track_list != nullptr) {
-			if (vm.count("add-track")) {
-				bool add_track_current = false;
-				std::string after_track = mpris_track_list_no_track;
-				if (vm.count("add-track-current")) add_track_current = true;
-				std::cout << add_track_current << '\n';
-				if (vm.count("add-track-after"))
-					after_track = vm["add-track-after"].as<std::string>();
-				track_list->add_track(
-					vm["add-track"].as<std::string>().c_str(),
-					after_track.c_str(), add_track_current
-				);
-			}
-			if (vm.count("remove-track"))
-				track_list->remove_track(vm["remove-track"].as<std::string>());
-			if (vm.count("go-to-track"))
-				track_list->go_to(vm["go-to-track"].as<std::string>());
-			if (vm.count("display-track-list-properties"))
-				track_list->print_properties(
-					vm["display-track-list-properties"].as<std::string>()
-				);
+			handle_arg("add_track", [&](const std::string& uri) {
+				auto add_track_current = false;
+				handle_arg("add_track_current", [&](const std::monostate&) { add_track_current = true; });
+				auto after_track = std::string{mpris_track_list_no_track};
+				handle_arg("add_track_current", [&](const std::string& uri) { after_track = uri; });
+				track_list->add_track(uri, after_track, add_track_current);
+			});
+			handle_arg("remove_track", [&](const std::string& uri) { track_list->remove_track(uri); });
+			handle_arg("go_to_track", [&](const std::string& uri) { track_list->go_to(uri); });
+			handle_arg(
+				"tracklist_properties",
+				[&](const std::monostate&) { track_list->print_properties(""); },
+				[&](const std::string& field) { track_list->print_properties(field); });
 		}
 
-		if (current_player != player->get_name())
-			save_current_player(player->get_name());
-
-	} catch (const std::exception &e) {
-		std::cerr << e.what() << '\n';
-		return 1;
+		if (current_player != player->get_name()) std::ofstream{tmp_file} << player->get_name();
+	} catch (const std::exception& e) {
+		std::println(std::cerr, "mprisctl: {}", e.what());
+		std::quick_exit(1);
 	}
-
-	return 0;
 }

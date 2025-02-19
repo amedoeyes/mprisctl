@@ -1,22 +1,23 @@
----@diagnostic disable: undefined-global, undefined-field
-
-local VERSION = "0.1.2"
+local VERSION = "1.0.0"
 
 set_project("mprisctl")
 set_version(VERSION)
-set_languages("c++20")
-set_warnings("allextra", "pedantic", "error")
+set_languages("cxx23")
+set_warnings("allextra", "pedantic")
+
+set_toolchains("clang")
+set_runtimes("c++_shared")
 
 add_rules("mode.debug", "mode.release", "mode.releasedbg", "mode.check", "mode.profile")
 add_rules("plugin.compile_commands.autoupdate", { lsp = "clangd", outputdir = "build" })
 
-add_requires("boost ^1.86.0", "dbus-1")
-add_requireconfs("boost", { configs = { program_options = true } })
+add_requires("dbus")
 
 target("mprisctl", function()
 	set_kind("binary")
 	add_files("src/**.cpp")
 	add_includedirs("include")
-	add_packages("dbus-1", "boost")
+	add_packages("dbus")
 	add_defines('VERSION = "' .. VERSION .. '"')
+	set_policy("build.c++.modules", true)
 end)

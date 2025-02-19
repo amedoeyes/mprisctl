@@ -14,7 +14,6 @@
 
 Build dependencies:
 
-- Boost
 - D-Bus
 
 To build the project, you need to have [xmake](https://github.com/xmake-io/xmake) installed. Then, run the following commands:
