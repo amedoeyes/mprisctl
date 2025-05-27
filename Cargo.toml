@@ -1,0 +1,8 @@
+[package]
+name = "mprisctl"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = "4.5.39"
+dbus = "0.9.7"
