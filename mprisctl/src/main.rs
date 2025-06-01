@@ -5,7 +5,8 @@ use std::{
     str::FromStr,
 };
 
-use clap::{Arg, Command, ValueEnum, crate_name, crate_version};
+use clap::{Arg, Command, ValueEnum, crate_name, crate_version, value_parser};
+use clap_complete::{Shell, generate};
 use directories::ProjectDirs;
 use mpris::{
     player::{LoopStatus, PlayerMetadata, PlayerProperties},
@@ -152,7 +153,7 @@ fn get_player_properties_field(props: &PlayerProperties, name: &str) -> Option<S
 }
 
 async fn run() -> Result<()> {
-    let cmd = Command::new(crate_name!())
+    let mut cmd = Command::new(crate_name!())
         .version(crate_version!())
         .disable_colored_help(true)
         .disable_help_subcommand(true)
@@ -250,9 +251,18 @@ async fn run() -> Result<()> {
             Command::new("player-properties")
                 .about("Get active player properties")
                 .arg(Arg::new("field").required(false)),
+        )
+        .subcommand(
+            Command::new("completions")
+                .about("Generate shell completions")
+                .arg(
+                    Arg::new("shell")
+                        .required(true)
+                        .value_parser(value_parser!(Shell)),
+                ),
         );
 
-    let matches = cmd.try_get_matches()?;
+    let matches = cmd.clone().try_get_matches()?;
     let mut root = Root::new().await?;
 
     if let Some(dirs) = ProjectDirs::from("", "", "mprisctl") {
@@ -434,6 +444,12 @@ async fn run() -> Result<()> {
                     }
                 });
             }
+        }
+
+        Some(("completions", sub_matches)) => {
+            let shell = sub_matches.get_one::<Shell>("shell").unwrap();
+            let name = &cmd.get_name().to_string();
+            generate(*shell, &mut cmd, name, &mut io::stdout());
         }
 
         _ => unreachable!(),

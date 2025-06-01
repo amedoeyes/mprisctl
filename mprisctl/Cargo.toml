@@ -8,6 +8,7 @@ name = "mprisctl"
 
 [dependencies]
 clap = { version = "4", features = ["cargo", "derive"] }
+clap_complete = "4"
 directories = "6"
 mpris = {version = "1", path="../mpris"}
 thiserror = { workspace = true }
