@@ -63,6 +63,28 @@ impl FromStr for VolumeCommand {
     }
 }
 
+#[derive(Debug, Clone)]
+enum SeekCommand {
+    Forward(i64),
+    Backward(i64),
+}
+
+impl FromStr for SeekCommand {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.chars().last() {
+            Some('+') => Ok(Self::Forward(
+                s[..s.len() - 1].parse().map_err(|_| "Invalid number")?,
+            )),
+            Some('-') => Ok(Self::Backward(
+                s[..s.len() - 1].parse().map_err(|_| "Invalid number")?,
+            )),
+            _ => Ok(Self::Forward(s.parse().map_err(|_| "Invalid number")?)),
+        }
+    }
+}
+
 fn get_metadata_field(metadata: &PlayerMetadata, name: &str) -> Option<String> {
     match name {
         "mpris:artUrl" => metadata.mpris_art_url.as_ref().map(|s| s.to_string()),
@@ -136,7 +158,6 @@ async fn run() -> Result<()> {
         .disable_help_subcommand(true)
         .arg_required_else_help(true)
         .subcommand_required(true)
-
         .subcommand(Command::new("next-player").about("Switch to next player"))
         .subcommand(Command::new("previous-player").about("Switch to previous player"))
         .subcommand(
@@ -146,7 +167,6 @@ async fn run() -> Result<()> {
         )
         .subcommand(Command::new("raise").about("Raise active player"))
         .subcommand(Command::new("quit").about("Quit active player"))
-
         .subcommand(Command::new("next").about("Skip to next track"))
         .subcommand(Command::new("previous").about("Skip to previous track"))
         .subcommand(Command::new("play").about("Play current track"))
@@ -157,7 +177,7 @@ async fn run() -> Result<()> {
             Command::new("seek").about("Seek in current track").arg(
                 Arg::new("offset")
                     .required(true)
-                    .value_parser(clap::value_parser!(i64))
+                    .value_parser(clap::value_parser!(SeekCommand))
                     .help("Offset of current position in microseconds"),
             ),
         )
@@ -214,7 +234,6 @@ async fn run() -> Result<()> {
                 .about("Open URI to play")
                 .arg(Arg::new("uri").required(true).help("URI to open")),
         )
-
         .subcommand(Command::new("player").about("Get active player"))
         .subcommand(Command::new("players").about("Get all players"))
         .subcommand(
@@ -264,9 +283,11 @@ async fn run() -> Result<()> {
         Some(("play-pause", _)) => root.get_player()?.play_pause().await?,
         Some(("stop", _)) => root.get_player()?.stop().await?,
         Some(("seek", sub_matches)) => {
-            root.get_player()?
-                .seek(*sub_matches.get_one::<i64>("offset").unwrap())
-                .await?
+            let player = root.get_player()?;
+            match sub_matches.get_one::<SeekCommand>("offset").unwrap() {
+                SeekCommand::Forward(o) => player.seek(*o).await?,
+                SeekCommand::Backward(o) => player.seek(-*o).await?,
+            }
         }
         Some(("set-position", sub_matches)) => {
             root.get_player()?
