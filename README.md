@@ -2,6 +2,8 @@
 
 Command-line tool to interact with MPRIS compatible media players.
 
+![demo](https://github.com/user-attachments/assets/0b625828-41ce-4d17-8fdb-c906f4983b07)
+
 ## Installation
 
 ```sh
