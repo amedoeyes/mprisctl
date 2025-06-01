@@ -1,0 +1,11 @@
+[package]
+name = "mpris"
+version = "1.0.0"
+edition = "2024"
+
+[lib]
+name = "mpris"
+
+[dependencies]
+thiserror = { workspace = true }
+zbus = "5"
