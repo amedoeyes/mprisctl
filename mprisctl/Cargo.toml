@@ -1,0 +1,15 @@
+[package]
+name = "mprisctl"
+version = "1.0.0"
+edition = "2024"
+
+[[bin]]
+name = "mprisctl"
+
+[dependencies]
+clap = { version = "4", features = ["cargo", "derive"] }
+clap_complete = "4"
+directories = "6"
+mpris = {version = "1", path="../mpris"}
+thiserror = { workspace = true }
+tokio = { version = "1", features = ["full"] }
