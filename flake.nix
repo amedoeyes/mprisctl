@@ -42,6 +42,7 @@
           '';
 
           meta = {
+            mainProgram = "mprisctl";
             description = "Command-line tool to interact with MPRIS compatible media players.";
             homepage = "https://github.com/amedoeyes/mprisctl";
             license = lib.licenses.agpl3Only;
