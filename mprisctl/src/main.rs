@@ -263,6 +263,14 @@ async fn run() -> Result<()> {
         );
 
     let matches = cmd.clone().try_get_matches()?;
+
+    if let Some(("completions", sub_matches)) = matches.subcommand() {
+        let shell = sub_matches.get_one::<Shell>("shell").unwrap();
+        let name = &cmd.get_name().to_string();
+        generate(*shell, &mut cmd, name, &mut io::stdout());
+        return Ok(());
+    }
+
     let mut root = Root::new().await?;
 
     if let Some(dirs) = ProjectDirs::from("", "", "mprisctl") {
@@ -444,12 +452,6 @@ async fn run() -> Result<()> {
                     }
                 });
             }
-        }
-
-        Some(("completions", sub_matches)) => {
-            let shell = sub_matches.get_one::<Shell>("shell").unwrap();
-            let name = &cmd.get_name().to_string();
-            generate(*shell, &mut cmd, name, &mut io::stdout());
         }
 
         _ => unreachable!(),
